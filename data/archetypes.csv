@@ -1,0 +1,33 @@
+function,vintage_min,vintage_max,weight,u_wall,u_roof,u_ground,u_window,g_window
+# Placeholder archetype table — U-values are TODO (replace with real data)
+# Columns: function, vintage_min, vintage_max, weight (heavy/medium/light/veryLight), u_wall, u_roof, u_ground, u_window, g_window
+# Sources: TABULA / national building catalogues
+residential,0,1945,heavy,1.8,1.2,0.8,5.5,0.6
+residential,0,1945,medium,1.9,1.3,0.9,5.5,0.6
+residential,0,1945,light,2.0,1.4,1.0,5.5,0.6
+residential,1946,1964,heavy,1.4,0.9,0.7,4.0,0.6
+residential,1946,1964,medium,1.5,1.0,0.8,4.0,0.6
+residential,1946,1964,light,1.6,1.1,0.9,4.0,0.6
+residential,1965,1974,heavy,1.0,0.7,0.6,3.0,0.6
+residential,1965,1974,medium,1.1,0.8,0.7,3.0,0.6
+residential,1965,1974,light,1.2,0.9,0.8,3.0,0.6
+residential,1975,1991,heavy,0.7,0.5,0.5,2.5,0.6
+residential,1975,1991,medium,0.8,0.6,0.6,2.5,0.6
+residential,1975,1991,light,0.9,0.7,0.7,2.5,0.6
+residential,1992,2005,heavy,0.5,0.4,0.4,2.0,0.6
+residential,1992,2005,medium,0.55,0.45,0.45,2.0,0.6
+residential,1992,2005,light,0.6,0.5,0.5,2.0,0.6
+residential,2006,9999,heavy,0.3,0.25,0.35,1.5,0.6
+residential,2006,9999,medium,0.35,0.3,0.38,1.5,0.6
+residential,2006,9999,light,0.4,0.35,0.4,1.5,0.6
+office,0,1945,heavy,1.8,1.2,0.8,5.5,0.55
+office,0,1945,medium,1.9,1.3,0.9,5.5,0.55
+office,1946,1974,heavy,1.2,0.8,0.7,3.5,0.55
+office,1946,1974,medium,1.3,0.9,0.8,3.5,0.55
+office,1975,1991,heavy,0.7,0.5,0.5,2.5,0.55
+office,1975,1991,medium,0.8,0.6,0.6,2.5,0.55
+office,1992,2005,heavy,0.5,0.4,0.4,1.8,0.55
+office,1992,2005,medium,0.55,0.45,0.45,1.8,0.55
+office,2006,9999,heavy,0.3,0.25,0.35,1.4,0.55
+office,2006,9999,medium,0.35,0.3,0.38,1.4,0.55
+default,0,9999,medium,0.6,0.4,0.5,2.0,0.6
