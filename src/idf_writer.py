@@ -8,7 +8,7 @@ import os
 from typing import IO
 
 from .model import BuildingModel, Construction, Material, NoMassMaterial, GasMaterial
-from .geometry import simplify_to_quad
+from .geometry import simplify_to_quad, newell_normal
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +94,12 @@ def _write_header(f: IO, bldg: BuildingModel):
         "    Counterclockwise,        !- Vertex Entry Direction\n"
         "    World;                   !- Coordinate System\n\n"
     )
+    # Site:Location omitted — weather file provides location data.
+    # Ground temperatures: EnergyPlus default is 18 °C when not specified;
+    # writing it explicitly suppresses the warning without changing results.
     f.write(
-        "Site:Location,\n"
-        "    Placeholder,             !- Name\n"
-        "    52.37,                   !- Latitude {deg}\n"
-        "    4.90,                    !- Longitude {deg}\n"
-        "    1.0,                     !- Time Zone {hr}\n"
-        "    0.0;                     !- Elevation {m}\n\n"
+        "Site:GroundTemperature:BuildingSurface,\n"
+        "    18,18,18,18,18,18,18,18,18,18,18,18; !- Monthly Ground Temperatures {C}\n\n"
     )
     f.write(
         "ScheduleTypeLimits,\n"
@@ -209,16 +208,26 @@ def _write_construction(f: IO, constr: Construction, materials: dict):
     f.write('\n'.join(lines) + '\n\n')
 
 
-def _surface_type_eplus(stype: str) -> str:
-    mapping = {
+def _surface_type_eplus(stype: str, verts: list = None) -> str:
+    base = {
         'wall': 'Wall',
         'roof': 'Roof',
         'ground': 'Floor',
         'floor': 'Floor',
         'interior': 'Wall',
         'party': 'Wall',
-    }
-    return mapping.get(stype, 'Wall')
+    }.get(stype, 'Wall')
+
+    # For interior/party horizontal surfaces, geometry overrides the default 'Wall'.
+    # normal.z < -0.7 → surface faces down from zone → Floor (zone above looking down).
+    # normal.z > +0.7 → surface faces up from zone → Ceiling (zone below looking up).
+    if base == 'Wall' and verts and len(verts) >= 3:
+        nz = newell_normal(verts)[2]
+        if nz < -0.7:
+            return 'Floor'
+        if nz > 0.7:
+            return 'Ceiling'
+    return base
 
 
 def _boundary_eplus(boundary: str, adj_surf_id: str = None) -> tuple:
@@ -239,7 +248,7 @@ def _write_building_surface(f: IO, surf, zone_id: str, bldg: BuildingModel):
         logger.warning("Surface %s has <3 vertices; skipping", surf.id)
         return
 
-    surf_type = _surface_type_eplus(surf.stype)
+    surf_type = _surface_type_eplus(surf.stype, surf.verts)
     obc, obc_obj, sun, wind = _boundary_eplus(surf.boundary, surf.adj_surface_id)
     constr_id = surf.constr_id or 'DefaultConstruction'
     n_verts = len(surf.verts)
@@ -377,17 +386,33 @@ def write_idf(bldg: BuildingModel, outdir: str):
             _write_zone(f, zone.id, zone.name)
             _write_zone_hvac(f, zone.id)
 
-        # Materials (deduplicated — same id written once)
+        # Collect construction IDs actually referenced by surfaces/openings with geometry.
+        used_constr_ids = set()
+        for zone in bldg.zones:
+            for surf in zone.surfaces:
+                if surf.constr_id:
+                    used_constr_ids.add(surf.constr_id)
+                for opening in surf.openings:
+                    if opening.constr_id and opening.verts and len(opening.verts) >= 3:
+                        used_constr_ids.add(opening.constr_id)
+
+        # Materials — write only those belonging to used constructions.
+        used_mat_ids = set()
+        for cid in used_constr_ids:
+            constr = bldg.constructions.get(cid)
+            if constr and constr.layers:
+                used_mat_ids.update(mid for mid, _ in constr.layers)
+
         written_mats = set()
         for mat_id, mat in bldg.materials.items():
-            if mat_id not in written_mats:
+            if mat_id in used_mat_ids and mat_id not in written_mats:
                 _write_material(f, mat)
                 written_mats.add(mat_id)
 
-        # Constructions
+        # Constructions — write only those referenced by at least one surface/opening.
         written_constrs = set()
         for constr_id, constr in bldg.constructions.items():
-            if constr_id not in written_constrs:
+            if constr_id in used_constr_ids and constr_id not in written_constrs:
                 _write_construction(f, constr, bldg.materials)
                 written_constrs.add(constr_id)
 

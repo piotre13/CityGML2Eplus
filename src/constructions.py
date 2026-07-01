@@ -17,6 +17,9 @@ NS = {
     'nrg3': 'http://www.citygml.org/ade/energy/3.0',
 }
 
+GML_ID = '{http://www.opengis.net/gml}id'
+XLINK_HREF = '{http://www.w3.org/1999/xlink}href'
+
 
 def _txt(elem, tag: str, ns=NS) -> Optional[str]:
     child = elem.find(tag, ns)
@@ -56,13 +59,25 @@ def resolve_layered_construction(
         mat_ref_el = layer_el.find('nrg3:material', NS)
         if mat_ref_el is None:
             continue
-        href = mat_ref_el.get('{http://www.w3.org/1999/xlink}href', '')
+        href = mat_ref_el.get(XLINK_HREF, '')
         mat_id = href.lstrip('#')
 
-        mat_elem = id_index.get(mat_id)
-        if mat_elem is None:
-            logger.warning("Material '%s' not found in index; skipping layer", mat_id)
-            continue
+        if mat_id:
+            mat_elem = id_index.get(mat_id)
+            if mat_elem is None:
+                logger.warning("Material '%s' not found in index; skipping layer", mat_id)
+                continue
+        else:
+            # Inline material child (no xlink:href) — skip lxml Comment/PI nodes
+            children = [c for c in mat_ref_el if isinstance(c.tag, str)]
+            if not children:
+                logger.warning("nrg3:material has no href and no inline child; skipping layer")
+                continue
+            mat_elem = children[0]
+            inline_id = mat_elem.get(GML_ID, '')
+            mat_id = inline_id or f"inlinemat_{id(mat_elem)}"
+            if inline_id:
+                id_index.setdefault(inline_id, mat_elem)
 
         tag = mat_elem.tag.split('}')[-1] if '}' in mat_elem.tag else mat_elem.tag
 
@@ -182,11 +197,13 @@ def resolve_construction(
     if tag == 'ReverseLayeredConstruction':
         base_el = constr_elem.find('nrg3:baseLayeredConstruction', NS)
         if base_el is None:
-            logger.warning("ReverseLayeredConstruction '%s' has no baseLayeredConstruction", constr_id)
+            base_el = constr_elem.find('nrg3:reverseOf', NS)
+        if base_el is None:
+            logger.warning("ReverseLayeredConstruction '%s' has no baseLayeredConstruction/reverseOf", constr_id)
             return None, {}
-        href = base_el.get('{http://www.w3.org/1999/xlink}href', '').lstrip('#')
+        href = base_el.get(XLINK_HREF, '').lstrip('#')
         if not href:
-            logger.warning("ReverseLayeredConstruction '%s' baseLayeredConstruction has no href", constr_id)
+            logger.warning("ReverseLayeredConstruction '%s' base reference has no href", constr_id)
             return None, {}
         base_constr, base_mats = resolve_construction(href, id_index, is_glazing=is_glazing)
         if base_constr is None:
